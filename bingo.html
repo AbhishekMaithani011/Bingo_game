@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bingo Game</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f3f0ff;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.game {
+    background: white;
+    padding: 25px;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 10px 35px #00000015;
+}
+
+h1 {
+    color: #6842c2;
+    font-size: 35px;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #777;
+    margin-bottom: 20px;
+}
+
+.bingo {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 20px 0;
+}
+
+.bingo span {
+    background: #e8e1fa;
+    color: #6842c2;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-weight: bold;
+    font-size: 23px;
+}
+
+.bingo span.done {
+    background: #6842c2;
+    color: white;
+}
+
+.board {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    padding: 6px;
+    border: 3px solid #6842c2;
+    border-radius: 12px;
+    background: #6842c2;
+    width: 100%;
+    aspect-ratio: 1;
+}
+
+.cell {
+    position: relative;
+    background: #f5f2ff;
+    border: 1px solid #cfc1f5;
+    border-radius: 7px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(17px, 5vw, 27px);
+    font-weight: bold;
+    color: #45316f;
+    cursor: pointer;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.cell select {
+    width: 100%;
+    height: 100%;
+    border: none;
+    outline: none;
+    background: transparent;
+    text-align: center;
+    font-size: clamp(16px, 4vw, 22px);
+    font-weight: bold;
+    color: #45316f;
+    cursor: pointer;
+    appearance: none;
+    text-align-last: center;
+}
+
+.cell.marked {
+    background: #d9ccff;
+    color: #6842c2;
+}
+
+.cell.marked::after {
+    content: "✕";
+    position: absolute;
+    font-size: clamp(35px, 8vw, 55px);
+    color: #e14e70;
+    opacity: .8;
+    pointer-events: none;
+}
+
+.line-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.win-line {
+    stroke: #e14e70;
+    stroke-width: 5;
+    stroke-linecap: round;
+    opacity: .9;
+}
+
+button {
+    padding: 13px 28px;
+    border: none;
+    border-radius: 10px;
+    background: #6842c2;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+button:hover {
+    background: #50319d;
+}
+
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+#status {
+    margin-top: 18px;
+    color: #6842c2;
+    font-weight: bold;
+    min-height: 22px;
+}
+
+#celebration {
+    display: none;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: 15px;
+    background: #eee7ff;
+    color: #6842c2;
+}
+
+#celebration h2 {
+    font-size: 38px;
+    margin-bottom: 8px;
+}
+
+.note {
+    color: #888;
+    font-size: 12px;
+    margin-top: 15px;
+}
+
+@media(max-width: 400px) {
+    .game { padding: 15px; }
+    .bingo span {
+        width: 35px;
+        height: 35px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="game">
+
+    <h1>🎯 BINGO</h1>
+    <p class="subtitle">Complete 5 lines to win!</p>
+
+    <div class="bingo" id="bingo">
+        <span>B</span>
+        <span>I</span>
+        <span>N</span>
+        <span>G</span>
+        <span>O</span>
+    </div>
+
+    <div class="board" id="board">
+        <svg class="line-layer" id="lines"
+             viewBox="0 0 500 500"
+             preserveAspectRatio="none">
+        </svg>
+    </div>
+
+    <p id="status">
+        Select numbers from 1 to 25 in every box.
+    </p>
+
+    <button id="lockBtn" onclick="lockBoard()">
+        OK - Lock Numbers
+    </button>
+
+    <button id="restartBtn" onclick="restartGame()"
+            style="display:none">
+        New Game ↻
+    </button>
+
+    <div id="celebration">
+        <h2>🎉 BINGO! 🎉</h2>
+        <p>Congratulations! You completed 5 lines!</p>
+    </div>
+
+    <p class="note">
+        Arrange your numbers, lock the board and start playing.
+    </p>
+
+</div>
+
+<script>
+const board = document.getElementById("board");
+const statusText = document.getElementById("status");
+const linesSVG = document.getElementById("lines");
+const bingoLetters = document.querySelectorAll(".bingo span");
+
+let locked = false;
+let marked = Array(25).fill(false);
+let completedLines = new Set();
+
+function createBoard() {
+    board.querySelectorAll(".cell").forEach(e => e.remove());
+
+    for (let i = 0; i < 25; i++) {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+
+        const select = document.createElement("select");
+        select.id = "cell" + i;
+
+        const empty = document.createElement("option");
+        empty.value = "";
+        empty.textContent = "-";
+        select.appendChild(empty);
+
+        for (let n = 1; n <= 25; n++) {
+            const option = document.createElement("option");
+            option.value = n;
+            option.textContent = n;
+            select.appendChild(option);
+        }
+
+        select.addEventListener("change", checkDuplicates);
+
+        cell.appendChild(select);
+        board.appendChild(cell);
+    }
+}
+
+function checkDuplicates() {
+    const values = [...document.querySelectorAll(".cell select")]
+        .map(s => s.value)
+        .filter(v => v !== "");
+
+    const duplicates = values.filter(
+        (v, i) => values.indexOf(v) !== i
+    );
+
+    document.querySelectorAll(".cell select").forEach(s => {
+        s.style.color = duplicates.includes(s.value)
+            ? "#e14e70" : "#45316f";
+    });
+}
+
+function lockBoard() {
+    const selects = [...document.querySelectorAll(".cell select")];
+
+    const values = selects.map(s => s.value);
+
+    if (values.some(v => v === "")) {
+        alert("Please fill all 25 boxes!");
+        return;
+    }
+
+    if (new Set(values).size !== 25) {
+        alert("Every number from 1 to 25 must be used exactly once!");
+        return;
+    }
+
+    locked = true;
+
+    selects.forEach(select => {
+        const cell = select.parentElement;
+        cell.textContent = select.value;
+        cell.dataset.index = selects.indexOf(select);
+        cell.addEventListener("click", () => markNumber(cell));
+    });
+
+    document.getElementById("lockBtn").style.display = "none";
+    document.getElementById("restartBtn").style.display = "inline-block";
+
+    statusText.textContent = "Click numbers to cross them!";
+}
+
+function markNumber(cell) {
+    if (!locked) return;
+
+    const index = Number(cell.dataset.index);
+
+    if (marked[index]) return;
+
+    marked[index] = true;
+    cell.classList.add("marked");
+
+    checkLines();
+}
+
+function getLines() {
+    const lines = [];
+
+    // Horizontal rows
+    for (let r = 0; r < 5; r++) {
+        lines.push({
+            id: "row" + r,
+            cells: Array.from({length: 5}, (_, c) => r * 5 + c),
+            x1: 50, y1: 50 + r * 100,
+            x2: 450, y2: 50 + r * 100
+        });
+    }
+
+    // Vertical columns
+    for (let c = 0; c < 5; c++) {
+        lines.push({
+            id: "col" + c,
+            cells: Array.from({length: 5}, (_, r) => r * 5 + c),
+            x1: 50 + c * 100, y1: 50,
+            x2: 50 + c * 100, y2: 450
+        });
+    }
+
+    // Diagonal 1
+    lines.push({
+        id: "diag1",
+        cells: [0, 6, 12, 18, 24],
+        x1: 50, y1: 50,
+        x2: 450, y2: 450
+    });
+
+    // Diagonal 2
+    lines.push({
+        id: "diag2",
+        cells: [4, 8, 12, 16, 20],
+        x1: 450, y1: 50,
+        x2: 50, y2: 450
+    });
+
+    return lines;
+}
+
+function checkLines() {
+    const lines = getLines();
+
+    lines.forEach(line => {
+        const complete = line.cells.every(i => marked[i]);
+
+        if (complete && !completedLines.has(line.id)) {
+            completedLines.add(line.id);
+            drawLine(line);
+        }
+    });
+
+    const count = completedLines.size;
+
+    bingoLetters.forEach((letter, i) => {
+        letter.classList.toggle("done", i < count);
+    });
+
+    statusText.textContent =
+        "Completed Lines: " + count + " / 5";
+
+    if (count >= 5) {
+        winGame();
+    }
+}
+
+function drawLine(line) {
+    const svgLine = document.createElementNS(
+        "http://www.w3.org/2000/svg", "line"
+    );
+
+    svgLine.setAttribute("x1", line.x1);
+    svgLine.setAttribute("y1", line.y1);
+    svgLine.setAttribute("x2", line.x2);
+    svgLine.setAttribute("y2", line.y2);
+    svgLine.setAttribute("class", "win-line");
+
+    linesSVG.appendChild(svgLine);
+}
+
+function winGame() {
+    statusText.textContent = "You completed 5 lines!";
+    document.getElementById("celebration").style.display = "block";
+
+    document.querySelectorAll(".cell").forEach(cell => {
+        cell.style.pointerEvents = "none";
+    });
+
+    document.getElementById("restartBtn").textContent =
+        "Play Again ↻";
+}
+
+function restartGame() {
+    locked = false;
+    marked = Array(25).fill(false);
+    completedLines.clear();
+
+    linesSVG.innerHTML = "";
+
+    bingoLetters.forEach(letter => letter.classList.remove("done"));
+
+    document.getElementById("celebration").style.display = "none";
+    document.getElementById("lockBtn").style.display = "inline-block";
+    document.getElementById("restartBtn").style.display = "none";
+
+    statusText.textContent =
+        "Select numbers from 1 to 25 in every box.";
+
+    createBoard();
+}
+
+createBoard();
+</script>
+
+</body>
+</html>
